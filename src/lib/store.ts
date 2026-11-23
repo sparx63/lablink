@@ -76,16 +76,15 @@ function migrateState(state: AppState): AppState {
     state.practicalExams = state.practicalExams
       .filter((ex) => ex && typeof ex.id === "string")
       .map((ex) => {
-        const examDate =
-          typeof ex.examDate === "string" && ex.examDate.length >= 8 ? ex.examDate : undefined;
+        const hasDate = typeof ex.examDate === "string" && ex.examDate.length >= 8;
         let status = ex.status || "DRAFT";
         // Incomplete LIVE/SCHEDULED rows must not participate in reservation math.
-        if (!examDate && (status === "LIVE" || status === "SCHEDULED")) status = "DRAFT";
+        if (!hasDate && (status === "LIVE" || status === "SCHEDULED")) status = "DRAFT";
         const rawCount =
           typeof ex.reservedUnitCount === "number" && ex.reservedUnitCount > 0 ? ex.reservedUnitCount : 1;
         return {
           ...ex,
-          examDate,
+          examDate: hasDate ? ex.examDate : "1970-01-01",
           status,
           reservedEquipmentIds: Array.isArray(ex.reservedEquipmentIds) ? ex.reservedEquipmentIds : [],
           // Leave spare units so Explore borrow demos are not fully locked out.
@@ -388,7 +387,9 @@ function examUnitReservations(state: AppState, equipmentId: string, start: strin
       if (!ex || !["SCHEDULED", "LIVE"].includes(ex.status)) return false;
       const reserved = ex.reservedEquipmentIds;
       if (!Array.isArray(reserved) || !reserved.includes(equipmentId)) return false;
-      if (!ex.examDate || typeof ex.startHour !== "number" || typeof ex.endHour !== "number") return false;
+      // Skip placeholder / incomplete dates from migrateState repairs.
+      if (!ex.examDate || ex.examDate === "1970-01-01" || typeof ex.startHour !== "number" || typeof ex.endHour !== "number")
+        return false;
       const exStart = new Date(`${ex.examDate}T${String(ex.startHour).padStart(2, "0")}:00:00`);
       const exEnd = new Date(`${ex.examDate}T${String(ex.endHour).padStart(2, "0")}:00:00`);
       if (Number.isNaN(+exStart) || Number.isNaN(+exEnd)) return false;
