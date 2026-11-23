@@ -1154,6 +1154,7 @@ export const markRecords: MarkRecord[] = [
   },
 ];
 
+/** Compact demo projects (Explore no longer links them; kept for AI fairness context). */
 export const projects: Project[] = [
   {
     id: "proj-1",
@@ -1163,8 +1164,7 @@ export const projects: Project[] = [
     department: "Computer Science",
     deadline: iso(14 * day),
     priority: "HIGH",
-    description:
-      "Build a wearable SpO2 prototype with custom PCB, firmware, and ML denoising on edge GPU.",
+    description: "Wearable SpO2 prototype — PCB, firmware, edge denoising.",
     neededCapabilities: ["oscilloscope", "fpga", "3d-print", "gpu", "soldering"],
     status: "ACTIVE",
   },
@@ -1176,7 +1176,7 @@ export const projects: Project[] = [
     department: "Biotechnology",
     deadline: iso(7 * day),
     priority: "CRITICAL",
-    description: "Optimize qPCR primers and run screening plates under BSL-1 conditions.",
+    description: "qPCR primer optimization under BSL-1.",
     neededCapabilities: ["pcr", "bsc", "pipetting", "cold-chain"],
     status: "ACTIVE",
   },
@@ -1188,7 +1188,7 @@ export const projects: Project[] = [
     department: "Mechanical Engineering",
     deadline: iso(21 * day),
     priority: "MEDIUM",
-    description: "Differential-drive rover with mocap validation and laser-cut chassis.",
+    description: "Differential-drive rover with mocap + laser-cut chassis.",
     neededCapabilities: ["mocap", "laser", "3d-print", "electronics"],
     status: "ACTIVE",
   },

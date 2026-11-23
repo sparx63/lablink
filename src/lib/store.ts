@@ -45,6 +45,17 @@ const DATA_FILE = path.join(DATA_DIR, "lablink.json");
 
 let memory: AppState | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
+/** Immutable seed snapshot — avoid re-building megastate on every cold load/migrate. */
+let seedTemplate: AppState | null = null;
+
+function getSeedTemplate(): AppState {
+  if (!seedTemplate) seedTemplate = createSeedState();
+  return seedTemplate;
+}
+
+function freshSeedState(): AppState {
+  return structuredClone(getSeedTemplate());
+}
 
 async function ensureLoaded(): Promise<AppState> {
   if (memory) return memory;
@@ -53,7 +64,7 @@ async function ensureLoaded(): Promise<AppState> {
     const raw = await fs.readFile(DATA_FILE, "utf8");
     memory = migrateState(JSON.parse(raw) as AppState);
   } catch {
-    memory = createSeedState();
+    memory = freshSeedState();
     await persist();
   }
   return memory!;
@@ -61,12 +72,12 @@ async function ensureLoaded(): Promise<AppState> {
 
 /** Soft-migrate older JSON seeds so new fields don't crash the app. */
 function migrateState(state: AppState): AppState {
-  const seed = createSeedState();
-  if (!state.timetable) state.timetable = seed.timetable;
-  if (!state.enrollments) state.enrollments = seed.enrollments;
-  if (!state.notifications) state.notifications = seed.notifications;
-  if (!state.programmes) state.programmes = seed.programmes;
-  if (!state.policies) state.policies = seed.policies || structuredClone(defaultPolicies);
+  const seed = getSeedTemplate();
+  if (!state.timetable) state.timetable = structuredClone(seed.timetable);
+  if (!state.enrollments) state.enrollments = structuredClone(seed.enrollments);
+  if (!state.notifications) state.notifications = structuredClone(seed.notifications);
+  if (!state.programmes) state.programmes = structuredClone(seed.programmes);
+  if (!state.policies) state.policies = structuredClone(seed.policies || defaultPolicies);
   // Student Explore no longer offers project linking — do not hard-require projectId.
   if (state.policies?.evidenceRequirements) {
     state.policies.evidenceRequirements.projectLinkRequiredForCollege = false;
@@ -100,12 +111,12 @@ function migrateState(state: AppState): AppState {
       }
     }
   }
-  if (!state.auditLog) state.auditLog = seed.auditLog || [];
-  if (!state.experimentBank) state.experimentBank = seed.experimentBank;
-  if (!state.practicalExams) state.practicalExams = seed.practicalExams;
-  if (!state.examAllocations) state.examAllocations = seed.examAllocations;
-  if (!state.markRecords) state.markRecords = seed.markRecords;
-  if (!state.savedResources) state.savedResources = seed.savedResources || [];
+  if (!state.auditLog) state.auditLog = structuredClone(seed.auditLog || []);
+  if (!state.experimentBank) state.experimentBank = structuredClone(seed.experimentBank);
+  if (!state.practicalExams) state.practicalExams = structuredClone(seed.practicalExams);
+  if (!state.examAllocations) state.examAllocations = structuredClone(seed.examAllocations);
+  if (!state.markRecords) state.markRecords = structuredClone(seed.markRecords);
+  if (!state.savedResources) state.savedResources = structuredClone(seed.savedResources || []);
   if (!state.sampleCsv) state.sampleCsv = seed.sampleCsv || SAMPLE_CSV;
 
   const hasCoordinator = state.users.some((u) => u.role === "TIMETABLE_COORDINATOR");
@@ -213,7 +224,8 @@ function persist() {
   writeQueue = writeQueue.then(async () => {
     if (!memory) return;
     await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(DATA_FILE, JSON.stringify(memory, null, 2), "utf8");
+    // Compact JSON — smaller I/O than pretty-printed megastate.
+    await fs.writeFile(DATA_FILE, JSON.stringify(memory), "utf8");
   });
   return writeQueue;
 }
@@ -239,7 +251,7 @@ export async function getState() {
 }
 
 export async function resetState() {
-  memory = createSeedState();
+  memory = freshSeedState();
   await persist();
   return memory;
 }
@@ -285,12 +297,10 @@ export async function listEquipment(
     items = filterByManagedLabs(actor, items);
   }
 
+  const labById = new Map(state.labs.map((l) => [l.id, l]));
   if (filters?.labId) items = items.filter((e) => e.labId === filters.labId);
   if (filters?.category) {
-    items = items.filter((e) => {
-      const lab = state.labs.find((l) => l.id === e.labId);
-      return lab?.category === filters.category;
-    });
+    items = items.filter((e) => labById.get(e.labId)?.category === filters.category);
   }
   if (filters?.availableOnly) items = items.filter((e) => e.status === "AVAILABLE");
   if (filters?.borrowableOnly) items = items.filter((e) => e.borrowable);
@@ -307,7 +317,7 @@ export async function listEquipment(
   }
   return items.map((e) => ({
     ...e,
-    lab: state.labs.find((l) => l.id === e.labId)!,
+    lab: labById.get(e.labId)!,
   }));
 }
 
@@ -325,13 +335,18 @@ export async function listBookings(
     items = filterByManagedLabs(actor, items);
   }
 
+  const equipmentById = new Map(state.equipment.map((e) => [e.id, e]));
+  const labById = new Map(state.labs.map((l) => [l.id, l]));
+  const userById = new Map(state.users.map((u) => [u.id, u]));
+  const projectById = new Map(state.projects.map((p) => [p.id, p]));
+
   return items
     .map((b) => ({
       ...b,
-      equipment: state.equipment.find((e) => e.id === b.equipmentId)!,
-      lab: state.labs.find((l) => l.id === b.labId)!,
-      student: state.users.find((u) => u.id === b.studentId)!,
-      project: state.projects.find((p) => p.id === b.projectId),
+      equipment: equipmentById.get(b.equipmentId)!,
+      lab: labById.get(b.labId)!,
+      student: userById.get(b.studentId)!,
+      project: b.projectId ? projectById.get(b.projectId) : undefined,
     }))
     .sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt));
 }
@@ -942,8 +957,9 @@ export async function getDashboardStats(actor?: User | null) {
   let incidents = state.incidents;
 
   if (actor && actor.role !== "STUDENT" && !isCampusWide(actor)) {
-    labs = await listLabs(actor);
-    const labSet = new Set(labs.map((l) => l.id));
+    const scope = managedLabIds(actor) || [];
+    const labSet = new Set(scope);
+    labs = labs.filter((l) => labSet.has(l.id));
     equipment = equipment.filter((e) => labSet.has(e.labId));
     bookings = bookings.filter((b) => labSet.has(b.labId));
     const eqIds = new Set(equipment.map((e) => e.id));

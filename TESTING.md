@@ -16,6 +16,7 @@ npm run build            # production TypeScript + Next build
 | `src/lib/scope.test.ts` | Faculty lab scope, SUPER_ADMIN campus-wide, coordinator timetable rights |
 | `src/lib/ai.test.ts` | Fair allocation ranking, lab lock, fine conflict surfacing |
 | `src/lib/store.booking.test.ts` | Create booking, scoped approvals list, decide, timetable publish visibility, exam generate/save |
+| `src/lib/store.borrow-purposes.test.ts` | Borrow API path for all 3 purposes (PERSONAL / COLLEGE / COMPETITION) |
 
 `store.booking.test.ts` uses an isolated temp `LABLINK_DATA_DIR` so it does not clobber your local `.data/` demo store.
 

@@ -1,13 +1,11 @@
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
-import { getDashboardStats, getSessionUser, listProjects, listTrainings } from "@/lib/store";
+import { getDashboardStats, getSessionUser } from "@/lib/store";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+/** Lean dashboard stats — omit unused projects/trainings payloads. */
+export async function GET() {
   const user = await getSessionUser();
   const actor = user?.role === "STUDENT" ? null : user;
   const stats = await getDashboardStats(actor);
-  const projects = await listProjects(searchParams.get("studentId") || undefined);
-  const trainings = await listTrainings();
-  return NextResponse.json({ stats, projects, trainings });
+  return NextResponse.json({ stats });
 }

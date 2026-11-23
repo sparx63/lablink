@@ -7,10 +7,23 @@ import { Stat } from "@/components/Stat";
 import { StatusChip } from "@/components/StatusChip";
 import { useSession } from "@/hooks/useSession";
 import { LAB_CATEGORY_LABEL, ROLE_LABEL, inr } from "@/lib/format";
+import type { Booking, Equipment, Lab, User } from "@/lib/types";
+
+type BookingRow = Booking & { equipment?: Equipment; student?: User; lab?: Lab };
+type AdminHomeData = {
+  stats?: {
+    pending?: number;
+    active?: number;
+    available?: number;
+    outstandingFines?: number;
+  };
+  bookings?: BookingRow[];
+  labs?: Lab[];
+};
 
 export default function AdminHome() {
   const { user, ready } = useSession({ require: "STAFF" });
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<AdminHomeData | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -21,10 +34,10 @@ export default function AdminHome() {
     ]).then(([stats, bookings, labs]) =>
       setData({
         ...stats,
-        bookings: (bookings.bookings || []).filter((b: any) =>
+        bookings: ((bookings.bookings || []) as BookingRow[]).filter((b) =>
           ["PENDING", "NEEDS_INFO", "AI_REVIEW"].includes(b.status)
         ),
-        labs: labs.labs,
+        labs: labs.labs as Lab[],
       })
     );
   }, [user]);
@@ -56,7 +69,7 @@ export default function AdminHome() {
                   Review approvals
                 </Link>
                 <Link href="/admin/ai" className="btn btn-accent">
-                  AI Allocate
+                  GenAI Allocate
                 </Link>
                 <Link href="/admin/exams" className="btn btn-ghost">
                   Exams
@@ -78,7 +91,7 @@ export default function AdminHome() {
 
         {scoped && (
           <div className="mt-4 rounded-xl border border-[var(--line)] bg-white/70 px-4 py-3 text-sm text-[var(--ink-soft)]">
-            Assigned labs: {(data?.labs || []).map((l: any) => l.code).join(", ") || "none"}
+            Assigned labs: {(data?.labs || []).map((l) => l.code).join(", ") || "none"}
           </div>
         )}
 
@@ -93,7 +106,7 @@ export default function AdminHome() {
           <section className="panel rounded-2xl p-5">
             <h2 className="text-xl font-semibold">Approval queue</h2>
             <div className="mt-4 space-y-3">
-              {(data?.bookings || []).slice(0, 5).map((b: any) => (
+              {(data?.bookings || []).slice(0, 5).map((b) => (
                 <div key={b.id} className="rounded-xl border border-[var(--line)] p-3">
                   <div className="flex items-center justify-between gap-2">
                     <div className="font-semibold">{b.equipment?.name}</div>
@@ -114,7 +127,7 @@ export default function AdminHome() {
           <section className="panel rounded-2xl p-5">
             <h2 className="text-xl font-semibold">{scoped ? "Your labs" : "Lab network"}</h2>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {(data?.labs || []).map((lab: any) => (
+              {(data?.labs || []).map((lab) => (
                 <div key={lab.id} className="rounded-xl border border-[var(--line)] p-3 text-sm">
                   <div className="font-semibold">{lab.code}</div>
                   <div className="text-[var(--ink-soft)]">

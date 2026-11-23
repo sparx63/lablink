@@ -3,26 +3,26 @@ import { Nav } from "@/components/Nav";
 
 const pillars = [
   {
-    title: "Campus-wide discovery",
-    body: "Students browse every department and lab typology — ideation, wet labs, HPC, fab, optics — then book in-lab use or borrow with competition evidence.",
+    title: "Equipment discovery",
+    body: "Students discover lab resources campus-wide — ideation, wet labs, HPC, fab, optics — across every department typology.",
   },
   {
-    title: "Faculty approvals & GenAI fairness",
-    body: "Lab teachers approve only their assigned labs. Staff AI Allocate scores deadlines, credentials, utilization, and concurrent holds (students never get AI).",
+    title: "Slot booking & faculty approvals",
+    body: "Book in-lab slots or borrow with evidence. Lab teachers approve only their assigned labs; central admin sees campus-wide.",
   },
   {
-    title: "Dual dashboards, full lifecycle",
-    body: "Student workspace (bookings, requests, timetable, exams) vs Ops Hub (approvals, conflicts, incidents/fines, utilization) with check-in, handover, and return.",
+    title: "GenAI fair allocation & conflict resolution",
+    body: "Staff GenAI Allocate scores deadlines, credentials, and utilization. Conflicts resolve with keep / shift / cancel — students never get AI.",
   },
 ];
 
 const psMap = [
-  { label: "Discovery", detail: "Explore every campus lab" },
-  { label: "Booking", detail: "Use in Lab + Borrow flows" },
-  { label: "Approvals", detail: "Faculty / admin gates" },
-  { label: "Fair allocation", detail: "Heuristic + optional Gemini" },
-  { label: "Conflicts", detail: "Detect · keep / shift / cancel" },
-  { label: "Utilization", detail: "Scoped analytics" },
+  { label: "Equipment discovery", detail: "Campus-wide Explore across all lab typologies" },
+  { label: "Slot booking", detail: "Use in Lab slots + Borrow custody windows" },
+  { label: "Faculty approvals", detail: "Scoped Approvals queue for lab teachers / admins" },
+  { label: "GenAI fair allocation", detail: "Staff GenAI allocator (+ optional Gemini)" },
+  { label: "Conflict resolution", detail: "Detect overlaps · keep / shift / cancel" },
+  { label: "Utilization", detail: "Scoped analytics for ops accountability" },
 ];
 
 export default function HomePage() {

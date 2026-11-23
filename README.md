@@ -6,13 +6,23 @@ LabLink is a **universal** lab operations layer: ideation studios, electronics b
 
 ## Problem statement alignment
 
+Built explicitly to the PS wording:
+
+- **Equipment discovery** — Student Explore browses every campus lab typology
+- **Slot booking** — Use in Lab (time slots) + Borrow (custody windows, competition evidence)
+- **Faculty approvals** — Approvals queue scoped to managed labs; `SUPER_ADMIN` campus-wide
+- **GenAI fair allocation** — Staff GenAI Allocate (heuristic scorer + optional Gemini); students never get AI
+- **Conflict resolution** — Conflicts desk: detect overlaps → keep / shift / cancel
+- **Dual dashboards** — Student workspace vs Ops Hub / Timetable desk
+- **Accountability** — Handover / return, incidents, admin-set fines, training gates
+
 | PS need | LabLink delivery |
 |---|---|
-| Discover lab resources campus-wide | Student **Explore** — all 12 lab typologies |
-| Book / request equipment | **Use in Lab** + **Borrow** (competition fields, no student AI) |
-| Faculty / admin approvals | **Approvals** queue scoped to managed labs; `SUPER_ADMIN` campus-wide |
-| GenAI fair allocation | Staff **Equipment AI** — heuristic scorer + optional Gemini |
-| Conflicts & utilization | Conflicts resolve + utilization analytics |
+| Equipment discovery | Student **Explore** — all 12 lab typologies |
+| Slot booking | **Use in Lab** + **Borrow** (competition fields, no student AI) |
+| Faculty approvals | **Approvals** queue scoped to managed labs |
+| GenAI fair allocation | Staff **GenAI Allocate** — heuristic + optional Gemini |
+| Conflict resolution | Conflicts resolve + utilization analytics |
 | Dual dashboards | Student workspace vs Ops Hub / Timetable desk |
 | Accountability | Handover / return, incidents, admin-set fines, training gates |
 
@@ -20,19 +30,26 @@ LabLink is a **universal** lab operations layer: ideation studios, electronics b
 
 ```
 src/
-  app/api/          # Route handlers — Zod validation, session auth, rate limits
-  app/student/      # Student dashboard (discovery, bookings, exams, timetable)
-  app/admin/        # Faculty / admin / coordinator ops
+  app/
+    api/            # Route handlers — Zod validation, session auth, rate limits, jsonError
+    student/        # Student dashboard (discovery, bookings, exams, timetable)
+    admin/          # Faculty / admin / coordinator ops (approvals, GenAI, conflicts)
+    login/          # Persona gate (server page + client LoginClient)
+  components/       # Shared UI (Nav, Stat, StatusChip) — keep thin
+  hooks/            # Client session bootstrap (useSession)
   lib/
-    store.ts        # Domain logic + JSON persistence
+    store.ts        # Domain logic + JSON persistence (Map lookups, compact writes)
     scope.ts        # Lab scoping / role helpers
-    ai.ts           # Fair allocation heuristic (+ optional Gemini)
+    ai.ts           # GenAI fair allocation heuristic (+ optional Gemini)
     validate.ts     # Zod schemas for mutating APIs
     api.ts          # requireSession / requireStaff / jsonError / rateLimit
+    bookingForm.ts  # Shared Explore booking form types + submit helpers
+    format.ts       # Intl dates, cn(), labels (no date-fns / clsx)
     seed.ts         # Demo personas & campus seed data
+    types.ts        # Shared domain types
 ```
 
-- **Persistence:** file-backed JSON under `LABLINK_DATA_DIR` (default `.data/`)
+- **Persistence:** file-backed JSON under `LABLINK_DATA_DIR` (default `.data/`) — compact stringify, in-memory cache after first load
 - **Auth:** demo persona gate → single server session (`sessionUserId`); mutations always resolve the actor from the server session, never from client-supplied role/actorId
 - **Scope:** `managedLabIds` for faculty/admin; timetable coordinators publish schedules campus-wide but do not run custody AI
 
@@ -100,7 +117,7 @@ Never commit real API keys. The repo ships only `.env.example`.
 npm test
 ```
 
-Runs four suites (see [TESTING.md](./TESTING.md)): validation, lab scoping, GenAI allocator, booking/timetable/exam store flows.
+Runs five suites (see [TESTING.md](./TESTING.md)): validation, lab scoping, GenAI allocator, booking/timetable/exam store flows, and all three borrow purposes.
 
 ## Production
 
@@ -125,10 +142,13 @@ gcloud run deploy lablink \
 
 ## Efficiency notes
 
-- Domain logic stays in `store` / `scope` / `ai` — no ORM or heavy client state libraries  
-- `cn()` is a local one-liner (no runtime clsx requirement in app code)  
-- Dates use `Intl` (`format.ts`) rather than a date library in the hot path  
-- Optional packages still listed in `package.json` (`date-fns`, `lucide-react`, `clsx`) are unused by app source and safe to prune when packaging for Cloud Run  
+- Lean dependency tree: Next · React · Zod only (no `date-fns` / `lucide-react` / `clsx`)
+- `cn()` + `Intl` live in `format.ts` — tree-shake friendly local helpers
+- Seed template cached after first build; migrate clones only missing slices
+- Compact JSON persistence (no pretty-print megastate writes)
+- List endpoints use `Map` lookups instead of repeated `.find` scans
+- `/api/stats` returns lean `{ stats }` only (dashboards do not pull projects/trainings)
+- `package.json` declares `engines.node`; Vercel config skips Docker `standalone`
 
 ## Stack
 

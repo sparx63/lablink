@@ -46,7 +46,7 @@ function staffLinks(user: User): NavLink[] {
   return [
     { href: "/admin", label: "Ops Hub" },
     { href: "/admin/approvals", label: "Approvals" },
-    { href: "/admin/ai", label: "Equipment AI" },
+    { href: "/admin/ai", label: "GenAI Allocate" },
     { href: "/admin/exams", label: "Exams" },
     { href: "/admin/incidents", label: "Incidents & Fines" },
     { href: "/admin/conflicts", label: "Conflicts" },

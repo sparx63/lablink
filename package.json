@@ -2,18 +2,18 @@
   "name": "lablink",
   "version": "1.0.0",
   "private": true,
+  "engines": {
+    "node": ">=18.18.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/start.mjs",
     "lint": "next lint",
-    "test": "tsx src/lib/validate.test.ts && tsx src/lib/scope.test.ts && tsx src/lib/ai.test.ts && tsx src/lib/store.booking.test.ts",
+    "test": "tsx src/lib/validate.test.ts && tsx src/lib/scope.test.ts && tsx src/lib/ai.test.ts && tsx src/lib/store.booking.test.ts && tsx src/lib/store.borrow-purposes.test.ts",
     "reset-data": "rm -rf .data && mkdir -p .data"
   },
   "dependencies": {
-    "clsx": "^2.1.1",
-    "date-fns": "^4.4.0",
-    "lucide-react": "^1.78.0",
     "next": "14.2.18",
     "react": "^18",
     "react-dom": "^18",

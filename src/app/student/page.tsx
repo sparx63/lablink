@@ -7,18 +7,24 @@ import { Stat } from "@/components/Stat";
 import { StatusChip } from "@/components/StatusChip";
 import { useSession } from "@/hooks/useSession";
 import { inr, when } from "@/lib/format";
+import type { Booking, Equipment, Lab } from "@/lib/types";
+
+type BookingRow = Booking & { equipment?: Equipment; lab?: Lab };
+type StudentHomeData = {
+  bookings?: BookingRow[];
+  stats?: { labCount?: number };
+};
 
 export default function StudentHome() {
   const { user, ready } = useSession({ require: "STUDENT" });
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<StudentHomeData | null>(null);
 
   useEffect(() => {
     if (!user) return;
     Promise.all([
       fetch(`/api/bookings?studentId=${user.id}`).then((r) => r.json()),
-      fetch(`/api/stats?studentId=${user.id}`).then((r) => r.json()),
-      fetch(`/api/fines?studentId=${user.id}`).then((r) => r.json()),
-    ]).then(([bookings, stats, fines]) => setData({ ...bookings, ...stats, ...fines }));
+      fetch("/api/stats").then((r) => r.json()),
+    ]).then(([bookings, stats]) => setData({ ...bookings, ...stats }));
   }, [user]);
 
   if (!ready || !user) {
@@ -27,7 +33,7 @@ export default function StudentHome() {
     );
   }
 
-  const upcoming = (data?.bookings || []).filter((b: any) =>
+  const upcoming = (data?.bookings || []).filter((b) =>
     ["PENDING", "APPROVED", "ACTIVE"].includes(b.status)
   );
 
@@ -70,7 +76,7 @@ export default function StudentHome() {
             </Link>
           </div>
           <div className="mt-4 space-y-3">
-            {upcoming.slice(0, 4).map((b: any) => (
+            {upcoming.slice(0, 4).map((b) => (
               <div key={b.id} className="rounded-xl border border-[var(--line)] bg-[#fffcf6] p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-semibold">{b.equipment?.name}</div>
