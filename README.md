@@ -78,10 +78,12 @@ See `.env.example`:
 | Variable | Purpose |
 |---|---|
 | `GEMINI_API_KEY` | Optional — narrative enrichment on `/api/ai/allocate` |
-| `LABLINK_DATA_DIR` | JSON store path (Cloud Run: `/tmp/lablink-data`) |
+| `LABLINK_DATA_DIR` | JSON store path (Cloud Run / Vercel: `/tmp/lablink-data`) |
 | `PORT` | HTTP port (`scripts/start.mjs` binds `0.0.0.0`) |
 
 Never commit real API keys. The repo ships only `.env.example`.
+
+**Vercel note:** the filesystem is ephemeral. JSON under `LABLINK_DATA_DIR` is wiped on cold starts / new instances; the app reseeds demo data when empty. Use a database for durable persistence.
 
 ## Security notes
 
@@ -107,7 +109,9 @@ npm run build
 PORT=3000 npm start   # uses scripts/start.mjs (standalone + static copy)
 ```
 
-Cloud Run: bind `0.0.0.0:$PORT`, set `LABLINK_DATA_DIR` to a mounted volume for durability.
+**Vercel:** default Next.js output (no `output: "standalone"`). Set `DOCKER_BUILD=1` only for Docker/Cloud Run builds. Prefer `LABLINK_DATA_DIR=/tmp/lablink-data`. Data resets when instances recycle unless you add a DB.
+
+Cloud Run: bind `0.0.0.0:$PORT`, set `LABLINK_DATA_DIR` to a mounted volume for durability. `DOCKER_BUILD=1` enables standalone output.
 
 ```bash
 gcloud builds submit --tag gcr.io/PROJECT_ID/lablink
