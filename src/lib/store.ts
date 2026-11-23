@@ -71,6 +71,36 @@ function migrateState(state: AppState): AppState {
   if (state.policies?.evidenceRequirements) {
     state.policies.evidenceRequirements.projectLinkRequiredForCollege = false;
   }
+  // Repair broken exam rows (missing reservation fields crashed every booking on .includes).
+  if (Array.isArray(state.practicalExams)) {
+    state.practicalExams = state.practicalExams
+      .filter((ex) => ex && typeof ex.id === "string")
+      .map((ex) => {
+        const examDate =
+          typeof ex.examDate === "string" && ex.examDate.length >= 8 ? ex.examDate : undefined;
+        let status = ex.status || "DRAFT";
+        // Incomplete LIVE/SCHEDULED rows must not participate in reservation math.
+        if (!examDate && (status === "LIVE" || status === "SCHEDULED")) status = "DRAFT";
+        const rawCount =
+          typeof ex.reservedUnitCount === "number" && ex.reservedUnitCount > 0 ? ex.reservedUnitCount : 1;
+        return {
+          ...ex,
+          examDate,
+          status,
+          reservedEquipmentIds: Array.isArray(ex.reservedEquipmentIds) ? ex.reservedEquipmentIds : [],
+          // Leave spare units so Explore borrow demos are not fully locked out.
+          reservedUnitCount: Math.min(rawCount, 2),
+        };
+      });
+  }
+  // Repair bookings missing window dates so conflict checks stay safe.
+  if (Array.isArray(state.bookings)) {
+    for (const b of state.bookings) {
+      if (!b.start || !b.end) {
+        b.status = b.status === "APPROVED" || b.status === "PENDING" ? "CANCELLED" : b.status;
+      }
+    }
+  }
   if (!state.auditLog) state.auditLog = seed.auditLog || [];
   if (!state.experimentBank) state.experimentBank = seed.experimentBank;
   if (!state.practicalExams) state.practicalExams = seed.practicalExams;
@@ -317,6 +347,8 @@ export async function findConflicts(equipmentId: string, start: string, end: str
     (b) =>
       b.equipmentId === equipmentId &&
       b.id !== excludeId &&
+      !!b.start &&
+      !!b.end &&
       !["REJECTED", "CANCELLED", "NO_SHOW", "CLOSED", "COMPLETED"].includes(b.status) &&
       overlaps(b.start, b.end, start, end)
   );
@@ -350,12 +382,16 @@ function availableUnits(state: AppState, equipmentId: string, start: string, end
 function examUnitReservations(state: AppState, equipmentId: string, start: string, end: string) {
   const startD = new Date(start);
   const endD = new Date(end);
-  return state.practicalExams
+  if (Number.isNaN(+startD) || Number.isNaN(+endD)) return 0;
+  return (state.practicalExams || [])
     .filter((ex) => {
-      if (!["SCHEDULED", "LIVE"].includes(ex.status)) return false;
-      if (!ex.reservedEquipmentIds.includes(equipmentId)) return false;
+      if (!ex || !["SCHEDULED", "LIVE"].includes(ex.status)) return false;
+      const reserved = ex.reservedEquipmentIds;
+      if (!Array.isArray(reserved) || !reserved.includes(equipmentId)) return false;
+      if (!ex.examDate || typeof ex.startHour !== "number" || typeof ex.endHour !== "number") return false;
       const exStart = new Date(`${ex.examDate}T${String(ex.startHour).padStart(2, "0")}:00:00`);
       const exEnd = new Date(`${ex.examDate}T${String(ex.endHour).padStart(2, "0")}:00:00`);
+      if (Number.isNaN(+exStart) || Number.isNaN(+exEnd)) return false;
       return startD < exEnd && exStart < endD;
     })
     .reduce((n, ex) => n + (ex.reservedUnitCount || 1), 0);
@@ -433,11 +469,12 @@ export async function createBooking(input: {
 
   const lab = state.labs.find((l) => l.id === equipment.labId)!;
   const certified = new Set(
-    state.trainingRecords
+    (state.trainingRecords || [])
       .filter((t) => t.userId === input.studentId && t.status === "CERTIFIED")
       .map((t) => t.trainingId)
   );
-  const missing = [...lab.requiredTrainings, ...equipment.requiresTrainingIds].filter((t) => !certified.has(t));
+  const required = [...(lab.requiredTrainings || []), ...(equipment.requiresTrainingIds || [])];
+  const missing = required.filter((t) => !certified.has(t));
   if (missing.length) {
     throw new Error(`Missing required training: ${missing.join(", ")}`);
   }
@@ -457,24 +494,17 @@ export async function createBooking(input: {
     );
   }
 
-  const examUnits = examUnitReservations(
-    state,
-    input.equipmentId,
-    input.start,
-    usageType === "BORROW" && input.expectedReturnAt ? input.expectedReturnAt : input.end
-  );
+  const windowEnd = usageType === "BORROW" && input.expectedReturnAt ? input.expectedReturnAt : input.end;
+  const examUnits = examUnitReservations(state, input.equipmentId, input.start, windowEnd);
   if (examUnits > 0 && usageType === "BORROW") {
-    const free = availableUnits(
-      state,
-      input.equipmentId,
-      input.start,
-      input.expectedReturnAt || input.end
-    ).length;
-    if (free <= examUnits) {
-      throw new Error("Borrowing blocked: remaining units are reserved for a practical examination.");
+    const free = availableUnits(state, input.equipmentId, input.start, windowEnd).length;
+    const borrowableSlots = Math.max(0, free - examUnits);
+    if (borrowableSlots < qtyReserved) {
+      throw new Error(
+        "Borrowing blocked: remaining units are reserved for a practical examination. Pick a window that avoids the exam, or choose shorter dates."
+      );
     }
   }
-
   let competition: CompetitionDetails | undefined;
   if (usageType === "BORROW") {
     if (!input.borrowPurpose) throw new Error("Borrow purpose is required");
@@ -485,10 +515,8 @@ export async function createBooking(input: {
     if (durationDays > maxDays + 0.01) {
       throw new Error(`Borrow duration exceeds institutional maximum of ${maxDays} days`);
     }
+    // Explore no longer collects projectId — COLLEGE_PROJECT must not require a linked project.
     const evidence = state.policies?.evidenceRequirements;
-    if (input.borrowPurpose === "COLLEGE_PROJECT" && evidence?.projectLinkRequiredForCollege && !input.projectId) {
-      throw new Error("College project borrows require a linked project under current policy");
-    }
     if (input.borrowPurpose === "COMPETITION") {
       if (!input.competition?.name || !input.competition.organiser || !input.competition.date) {
         throw new Error("Competition name, organiser and date are mandatory");

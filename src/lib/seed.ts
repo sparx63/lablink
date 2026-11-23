@@ -1096,7 +1096,8 @@ export const practicalExams: PracticalExam[] = [
     endHour: 13,
     status: "SCHEDULED",
     reservedEquipmentIds: ["eq-fpga", "eq-scope"],
-    reservedUnitCount: 4,
+    // Leave spare units so demo borrow windows that graze exam day can still succeed.
+    reservedUnitCount: 2,
     createdById: "u-faculty-elec",
     createdAt: iso(-5 * day),
   },

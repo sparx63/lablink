@@ -16,6 +16,7 @@ export default function DiscoverPage() {
   const [labs, setLabs] = useState<any[]>([]);
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [bookingEq, setBookingEq] = useState<any>(null);
   const [mode, setMode] = useState<Mode>(null);
   const [showTimetable, setShowTimetable] = useState(false);
@@ -83,9 +84,10 @@ export default function DiscoverPage() {
   }
 
   async function submitBooking() {
-    if (!user || !bookingEq || !mode) return;
+    if (!user || !bookingEq || !mode || submitting) return;
     setMessage("");
     setMessageIsError(false);
+    setSubmitting(true);
     try {
       if (mode === "IN_LAB") {
         if (!form.purpose.trim()) throw new Error("Purpose / reason is required");
@@ -99,7 +101,7 @@ export default function DiscoverPage() {
             throw new Error("Competition name, organiser and date are required");
           }
         } else if (!form.purpose.trim()) {
-          throw new Error("Purpose / reason is required");
+          throw new Error("Purpose / reason is required for this borrow type");
         }
       }
 
@@ -108,12 +110,20 @@ export default function DiscoverPage() {
         (form.borrowPurpose === "COMPETITION"
           ? `Competition: ${form.competitionName.trim()} (${form.competitionOrganiser.trim()})`
           : "");
+      if (!purposeText) throw new Error("Purpose / reason is required");
 
       const startIso = parseLocalDateTime(form.start, mode === "BORROW" ? "Borrow / collect time" : "Start time");
       const endIso =
         mode === "BORROW"
           ? parseLocalDateTime(form.expectedReturnAt, "Expected return time")
           : parseLocalDateTime(form.end, "End time");
+      if (+new Date(endIso) <= +new Date(startIso)) {
+        throw new Error(
+          mode === "BORROW"
+            ? "Expected return must be after borrow / collect time"
+            : "End time must be after start time"
+        );
+      }
 
       const body: Record<string, unknown> = {
         equipmentId: bookingEq.id,
@@ -121,7 +131,7 @@ export default function DiscoverPage() {
         start: startIso,
         end: endIso,
         purpose: purposeText,
-        notes: form.notes || undefined,
+        notes: form.notes.trim() ? form.notes.trim() : undefined,
         usageType: mode,
       };
       if (mode === "BORROW") {
@@ -145,16 +155,27 @@ export default function DiscoverPage() {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         setMessageIsError(true);
-        setMessage(data.error || "Request failed");
+        setMessage(
+          typeof data.error === "string" && data.error.trim()
+            ? data.error
+            : res.status === 401
+              ? "Sign in required — refresh and log in again"
+              : `Request failed (${res.status})`
+        );
         return;
       }
+      if (!data.booking?.status) {
+        setMessageIsError(true);
+        setMessage("Server returned an unexpected response — try again");
+        return;
+      }
+      const eqName = bookingEq.name;
+      const status = data.booking.status as string;
       const warnings = (data.timetableWarnings || []).join(" · ");
+      // In-modal success first, then close and keep a page-level confirmation.
       setMessageIsError(false);
-      setMessage(
-        `${mode === "BORROW" ? "Borrow" : "In-lab"} request for ${bookingEq.name} — status ${data.booking.status}${
-          warnings ? ` · Note: ${warnings}` : ""
-        }`
-      );
+      setMessage("Request sent");
+      await new Promise((r) => setTimeout(r, 700));
       setBookingEq(null);
       setMode(null);
       setForm({
@@ -170,10 +191,16 @@ export default function DiscoverPage() {
         competitionWebsite: "",
         competitionProject: "",
       });
+      setMessageIsError(false);
+      setMessage(
+        `Request sent — ${eqName} · status ${status}${warnings ? ` · Note: ${warnings}` : ""}`
+      );
       load();
     } catch (e) {
       setMessageIsError(true);
       setMessage((e as Error).message || "Request failed");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -466,7 +493,9 @@ export default function DiscoverPage() {
             )}
             <div className="mt-5 flex justify-end gap-2">
               <button
+                type="button"
                 className="btn btn-ghost"
+                disabled={submitting}
                 onClick={() => {
                   setBookingEq(null);
                   setMode(null);
@@ -476,8 +505,13 @@ export default function DiscoverPage() {
               >
                 Cancel
               </button>
-              <button className="btn btn-primary" onClick={submitBooking} disabled={!canSubmit()}>
-                Submit request
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => void submitBooking()}
+                disabled={!canSubmit() || submitting}
+              >
+                {submitting ? "Submitting…" : "Submit request"}
               </button>
             </div>
             <p className="mt-3 text-xs text-[var(--ink-soft)]">

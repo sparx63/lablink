@@ -18,6 +18,8 @@ export const SessionBodySchema = z.object({
 export const CreateBookingSchema = z.object({
   equipmentId: z.string().min(1).max(64),
   studentId: z.string().min(1).max(64).optional(),
+  /** Optional — Explore no longer collects projects; never required for COLLEGE_PROJECT. */
+  projectId: z.string().max(64).optional(),
   start: isoOrLocal,
   end: isoOrLocal,
   purpose: z.string().min(1).max(500).transform((s) => sanitizeText(s, 500)),
